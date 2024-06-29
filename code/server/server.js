@@ -11,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const allitems = {};
 const fs = require('fs');
+const { set } = require('mongoose');
 
 app.use(express.static(process.env.STATIC_DIR));
 
@@ -75,6 +76,47 @@ app.get('/lessons', (req, res) => {
   }
 });
 
+app.post('/lessons', async (req, res) => {
+  const { name, email } = req.body;
+
+  try {
+    // Optionally, check if the customer already exists
+    let customer = await stripe.customers.list({
+      email: email,
+      limit: 1
+    });
+
+    if (customer.data.length === 0) {
+      // Create a new customer if not found
+      customer = await stripe.customers.create({
+        name,
+        email,
+      });
+    } else {
+      customer = customer.data[0];
+      return res.status(201).send({
+        error: 'A customer with this email address already exists.',
+        customerId: customer.id,
+      });
+    }
+
+    // Create a SetupIntent
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customer.id
+    });
+    console.log(setupIntent);
+
+    res.status(200).send({
+      clientSecret: setupIntent.client_secret,
+      customerId: customer.id
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({
+      error: error.message
+    });
+  }
+});
 // TODO: Integrate Stripe
 
 // Milestone 2: '/schedule-lesson'
@@ -292,4 +334,4 @@ function errorHandler(err, req, res, next) {
 
 app.use(errorHandler);
 
-app.listen(4242, () => console.log(`Node server listening on port http://localhost:${4242}`));
+app.listen(5000, () => console.log(`Node server listening on port http://localhost:${5000}`));
