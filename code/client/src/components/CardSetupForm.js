@@ -1,19 +1,3 @@
-<<<<<<< HEAD
-import React, { useState } from "react";
-import { CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import SignupComplete from "./SignupComplete";
-
-const CardSetupForm = (props) => {
-  const {
-    selected,
-    mode,
-    details,
-    customerId,
-    learnerEmail,
-    learnerName,
-    onSuccessfulConfirmation,
-  } = props;
-=======
 import {
   PaymentElement,
   useElements,
@@ -25,21 +9,15 @@ import SignupComplete from "./SignupComplete";
 const CardSetupForm = (props) => {
   const { selected, mode, details, customerId, learnerEmail, learnerName } =
     props;
->>>>>>> main
   const [paymentSucceeded, setPaymentSucceeded] = useState(false);
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [last4, setLast4] = useState("");
-<<<<<<< HEAD
-=======
   const [cardComplete, setCardComplete] = useState(false);
->>>>>>> main
 
   const stripe = useStripe();
   const elements = useElements();
 
-<<<<<<< HEAD
-=======
   const handleChange = (event) => {
     if (event.error) {
       setError(event.error.message);
@@ -73,7 +51,6 @@ const CardSetupForm = (props) => {
     }
   };
 
->>>>>>> main
   const handleClick = async (e) => {
     e.preventDefault();
 
@@ -81,38 +58,6 @@ const CardSetupForm = (props) => {
       return;
     }
 
-<<<<<<< HEAD
-    try {
-      setProcessing(true);
-
-      // Create PaymentMethod using card information
-      const { error, paymentMethod } = await stripe.createPaymentMethod({
-        type: "card",
-        card: elements.getElement(CardElement),
-        billing_details: {
-          email: learnerEmail,
-          name: learnerName,
-        },
-      });
-
-      if (error) {
-        setError(error.message);
-        setProcessing(false);
-        return;
-      }
-
-      // PaymentMethod created successfully
-      setLast4(paymentMethod.card.last4);
-      setPaymentSucceeded(true);
-      setProcessing(false);
-
-      // Callback function to handle successful confirmation
-      if (onSuccessfulConfirmation) {
-        onSuccessfulConfirmation(paymentMethod);
-      }
-    } catch (error) {
-      setError(error.message || "An error occurred during payment processing.");
-=======
     setProcessing(true);
     setError(null);
 
@@ -139,22 +84,14 @@ const CardSetupForm = (props) => {
     } catch (error) {
       setError(error.message);
     } finally {
->>>>>>> main
       setProcessing(false);
     }
   };
 
   if (selected === -1) return null;
-<<<<<<< HEAD
-
-  if (paymentSucceeded) {
-    return (
-      <div className="lesson-form">
-=======
   if (paymentSucceeded)
     return (
       <div className={`lesson-form`}>
->>>>>>> main
         <SignupComplete
           active={paymentSucceeded}
           email={learnerEmail}
@@ -163,18 +100,10 @@ const CardSetupForm = (props) => {
         />
       </div>
     );
-<<<<<<< HEAD
-  }
-
-  return (
-    <div className="lesson-form">
-      <div className="lesson-desc">
-=======
 
   return (
     <div className={`lesson-form`}>
       <div className={`lesson-desc`}>
->>>>>>> main
         <h3>Registration details</h3>
         <div id="summary-table" className="lesson-info">
           {details}
@@ -191,36 +120,6 @@ const CardSetupForm = (props) => {
               </span>
             </div>
             <div className="lesson-payment-element">
-<<<<<<< HEAD
-              <label>Card details</label>
-              <CardElement
-                options={{
-                  style: {
-                    base: {
-                      fontSize: "16px",
-                      color: "#424770",
-                      "::placeholder": {
-                        color: "#aab7c4",
-                      },
-                    },
-                    invalid: {
-                      color: "#9e2146",
-                    },
-                  },
-                  hidePostalCode: true,
-                }}
-              />
-            </div>
-            <button
-              id="checkout-btn"
-              disabled={!stripe || processing}
-              onClick={handleClick}
-            >
-              <span id="button-text">
-                {processing ? "Processing..." : "Checkout"}
-              </span>
-            </button>
-=======
               <PaymentElement id="payment-element" onChange={handleChange} />
               <button
                 id="submit"
@@ -252,7 +151,6 @@ const CardSetupForm = (props) => {
                 )}
               </button>
             </div>
->>>>>>> main
           </div>
         </div>
         {error && (
