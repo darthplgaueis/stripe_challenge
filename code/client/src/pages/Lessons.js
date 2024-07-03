@@ -34,7 +34,7 @@ const Lessons = () => {
   const [sessions, setSessions] = useState([]); //info about available sessions
   const [selected, setSelected] = useState(-1); //index of selected session
   const [details, setDetails] = useState(""); //details about selected session
-
+  const [lessonDateTime, setLessonDateTime] = useState("");
   //toggle selected session
   const toggleItem = (index) => {
     let items = sessions;
@@ -47,6 +47,7 @@ const Lessons = () => {
     setDetails(
       `You have requested a lesson for ${items[index].title} \n Please complete this form to reserve your lesson.`
     );
+    setLessonDateTime(items[index].title);
   };
   //Load sessions info.
   useEffect(() => {
@@ -70,7 +71,7 @@ const Lessons = () => {
       {
         //Component to process user info for registration.
       }
-      <RegistrationForm selected={selected} details={details} />
+      <RegistrationForm selected={selected} details={details} lessonDateTime={lessonDateTime}/>
       <div className="lesson-title" id="title">
         <h2>Guitar lessons</h2>
       </div>
