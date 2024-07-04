@@ -10,7 +10,7 @@ const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 
 const allitems = {};
-const fs = require('fs');
+const fs = require("fs");
 
 app.use(express.static(process.env.STATIC_DIR));
 
@@ -76,13 +76,13 @@ app.get("/lessons", (req, res) => {
   }
 });
 
-app.post('/lessons', async (req, res) => {
+app.post("/lessons", async (req, res) => {
   const { name, email, lessonDateTime } = req.body;
 
   try {
     let customer = await stripe.customers.list({
       email,
-      limit: 1
+      limit: 1,
     });
 
     if (customer.data.length === 0) {
@@ -90,15 +90,15 @@ app.post('/lessons', async (req, res) => {
         name,
         email,
         metadata: {
-          first_lesson: lessonDateTime
-        }
+          first_lesson: lessonDateTime,
+        },
       });
     } else {
       customer = customer.data[0];
       // Update the existing customer with the new name
       await stripe.customers.update(customer.id, { name });
       return res.status(201).send({
-        error: 'A customer with this email address already exists.',
+        error: "A customer with this email address already exists.",
         customerId: customer.id,
       });
     }
@@ -106,21 +106,21 @@ app.post('/lessons', async (req, res) => {
     // Create a basic SetupIntent
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
-      usage: 'off_session'
+      usage: "off_session",
     });
 
     res.status(200).send({
       clientSecret: setupIntent.client_secret,
-      customerId: customer.id
+      customerId: customer.id,
     });
   } catch (error) {
     console.log(error);
     res.status(500).send({
-      error: error.message
+      error: error.message,
     });
   }
 });
-app.get('/get-payment-method-details/:paymentMethodId', async (req, res) => {
+app.get("/get-payment-method-details/:paymentMethodId", async (req, res) => {
   try {
     const paymentMethodId = req.params.paymentMethodId;
     const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
@@ -130,7 +130,9 @@ app.get('/get-payment-method-details/:paymentMethodId', async (req, res) => {
       brand: paymentMethod.card.brand,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve payment method details' });
+    res
+      .status(500)
+      .json({ error: "Failed to retrieve payment method details" });
   }
 });
 
@@ -164,8 +166,128 @@ app.get('/get-payment-method-details/:paymentMethodId', async (req, res) => {
 //         found for that customer return an msg 'no payment methods found for <customer_id>'
 //    payment_intent_id: if a payment intent was created but not successfully authorized
 // }
+// ####### My implementation ############
+// app.post("/schedule-lesson", async (req, res) => {
+// TODO: Integrate Stripe
+//   const { customerId, amount, description } = req.body;
+
+//   try {
+//     const paymentIntent = await stripe.paymentIntents.create({
+//       amount,
+//       customer: customerId,
+//       currency: "usd",
+//       automatic_payment_methods: {
+//         enabled: true,
+//       },
+//     });
+//     res.send(200).json({payment : paymentIntent});
+//   } catch (error) {
+//     res
+//     .status(500)
+//     .json( error.message );
+//   }
+// });
+
+// app.post("/schedule-lesson", async (req, res) => {
+//   const { customer_id, amount, description } = await req.body;
+
+//   console.log(customer_id, amount, description);
+//   try {
+//     // Fetch the customer to check for payment methods
+//     const customer = await stripe.customers.retrieve(customer_id);
+//     console.log(customer);
+//     // if (!customer.invoice_settings.default_payment_method) {
+//     //   return res.status(400).json({
+//     //     error: {
+//     //       code: "no_payment_method",
+//     //       message: `No payment methods found for ${customer_id}`,
+//     //     },
+//     //   });
+//     // }
+
+//     // Create a PaymentIntent
+//     const paymentIntent = await stripe.paymentIntents.create({
+//       amount: amount,
+//       currency: "usd", // Assuming USD, change if needed
+//       customer: customer_id,
+//       description: description,
+//       payment_method: customer.invoice_settings.default_payment_method,
+//       off_session: true,
+//       confirm: true,
+//       metadata: {
+//         type: "lesson-payment",
+//       },
+//     });
+
+//     // If successful, return the PaymentIntent
+//     res.json({ payment: paymentIntent });
+//   } catch (error) {
+//     console.error("Error:", error);
+
+//     // Handle Stripe errors
+//     if (error.type === "StripeError") {
+//       res.status(400).json({
+//         error: {
+//           code: error.code,
+//           message: error.message,
+//         },
+//         payment_intent_id: error.payment_intent?.id,
+//       });
+//     } else {
+//       // Handle other errors
+//       res.status(500).json({
+//         error: {
+//           code: "internal_server_error",
+//           message: "An unexpected error occurred",
+//         },
+//       });
+//     }
+//   }
+// });
+
 app.post("/schedule-lesson", async (req, res) => {
-  // TODO: Integrate Stripe
+  const { customer_id, amount, description } = req.body;
+  try {
+    // Fetch the customer's payment methods
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: customer_id,
+      type: "card",
+    });
+
+    if (paymentMethods.data.length === 0) {
+      return res.status(400).json({
+        error: {
+          code: "no_payment_method",
+          message: `No payment methods found for ${customer_id}`,
+        },
+      });
+    }
+
+    // Create a payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: "usd",
+      customer: customer_id,
+      payment_method: paymentMethods.data[0].id,
+      confirm: true,
+      off_session: true,
+      capture_method: "manual", // Manually capture the payment later
+      description: description,
+    });
+
+    return res.status(200).json({ payment: paymentIntent });
+  } catch (error) {
+    console.error("Error creating payment intent:", error);
+    return res.status(400).json({
+      error: {
+        code: error.code || "unknown_error",
+        message: error.message || "An unknown error occurred",
+      },
+      payment_intent_id: error.payment_intent
+        ? error.payment_intent.id
+        : undefined,
+    });
+  }
 });
 
 // Milestone 2: '/complete-lesson-payment'
@@ -193,8 +315,45 @@ app.post("/schedule-lesson", async (req, res) => {
 //       message: the message returned from the error from Stripe
 // }
 //
+
+// ################### My implementation #######################
+// app.post("/complete-lesson-payment", async (req, res) => {
+//   // TODO: Integrate Stripe
+//   const { payement_intent_id, amount } = req.body;
+
+//   let paymentIntent;
+//   if (amount !== undefined) {
+//     paymentIntent = await stripe.paymentIntents.update(payement_intent_id, {
+//       amount: amount,
+//     });
+//   }
+//   paymentIntent = await stripe.paymentIntents.capture(payement_intent_id);
+//   res.json({payment : paymentIntent});
+// });
+
 app.post("/complete-lesson-payment", async (req, res) => {
-  // TODO: Integrate Stripe
+  const { payment_intent_id, amount } = req.body;
+  // console.log("complete lesson payment endpoint hit!");
+  try {
+    const paymentIntent = await stripe.paymentIntents.capture(
+      payment_intent_id
+    );
+
+    // Capture the PaymentIntent
+    // console(paymentIntent);
+
+    // Return the successful payment intent
+    res.json({ payment: paymentIntent });
+  } catch (error) {
+    // Handle errors
+    console.error("Error  payment intent:", error);
+    return res.status(400).json({
+      error: {
+        code: error.code || "resource_missing",
+        message: `No such payment_intent: '${payment_intent_id}'`,
+      },
+    });
+  }
 });
 
 // Milestone 2: '/refund-lesson'
@@ -225,8 +384,37 @@ app.post("/complete-lesson-payment", async (req, res) => {
 //        message: e.error.message
 //      }
 //  }
+
 app.post("/refund-lesson", async (req, res) => {
-  // TODO: Integrate Stripe
+  const { payment_intent_id, amount } = req.body;
+
+  try {
+    // Retrieve the PaymentIntent to check its status
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      payment_intent_id
+    );
+
+    let refund;
+
+    if (paymentIntent.status === "succeeded") {
+      // If the payment has been captured, create a refund
+      refund = await stripe.refunds.create({
+        payment_intent: payment_intent_id,
+        amount: amount, // If amount is not provided, it will refund the full amount
+        reason: "requested_by_customer",
+      });
+
+      res.json({ refund: refund.id });
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(400).json({
+      error: {
+        code: "resource_missing",
+        message: `No such payment_intent: '${payment_intent_id}'`,
+      },
+    });
+  }
 });
 
 // Milestone 3: Managing account info
@@ -347,4 +535,6 @@ function errorHandler(err, req, res, next) {
 
 app.use(errorHandler);
 
-app.listen(4242, () => console.log(`Node server listening on port http://localhost:${4242}`));
+app.listen(4242, () =>
+  console.log(`Node server listening on port http://localhost:${4242}`)
+);
