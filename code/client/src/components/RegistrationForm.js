@@ -60,7 +60,7 @@ const RegistrationForm = (props) => {
         setCustomerId(data.customerId);
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message)
     }
 
     setProcessing(false);

@@ -11,5 +11,6 @@ export const accountUpdate = async (id) => {
     return null;
   }
   const data = await response.json();
+  console.log(data);
   return data;
 };

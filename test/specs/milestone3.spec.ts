@@ -63,7 +63,7 @@ test.describe('Updating account details', () => {
 
     // Click #submit
     await submitForm(page);
-
+    console.log("working");
     await page.waitForSelector(`text=Card last 4: ${secondValidLast4}`);
     const cardLast4 = await page.locator('#card-last4').textContent();
 

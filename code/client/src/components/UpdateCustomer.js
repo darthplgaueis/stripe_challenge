@@ -34,12 +34,45 @@ const UpdateCustomer = ({
     async function setUp() {
       const { key } = await fetch("/config").then((res) => res.json());
       setStripePromise(loadStripe(key));
+      // const { clientSecret } = await fetch("/create-setup-intent", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({ customerId }),
+      // }).then((res) => res.json());
+
+      // setStripeOptions({ clientSecret });
     }
     setUp();
   }, []);
 
   const handleClick = async () => {
     // TODO: Integrate Stripe
+    try {
+      const response = await fetch(`/account-update/${customerId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name,
+          email: email,
+        }),
+      });
+
+      if (response.status === 201) {
+        setError("Customer email already exists!");
+      } else {
+        const { clientSecret } = await fetch("/create-setup-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customerId }),
+        }).then((res) => res.json());
+  
+        setStripeOptions({ clientSecret });
+        onSuccessfulConfirmation(customerId);
+        setpaymentElementLoaded(true);
+      }
+    } catch (error) {
+      console.log("error: ");
+    }
   };
 
   return (
@@ -86,19 +119,15 @@ const UpdateCustomer = ({
               </div>
             ) : null}
           </div>
-          
-          <button
-            id="checkout-btn"
-            disabled={processing}
-            onClick={handleClick}
-          >
+
+          <button id="checkout-btn" disabled={processing} onClick={handleClick}>
             {processing ? (
               <div className="spinner" id="spinner"></div>
             ) : (
               <span id="button-text">Update Payment Method</span>
             )}
           </button>
-        
+
           <div className="lesson-legal-info">
             Your card will not be charged. By registering, you hold a session
             slot which we will confirm within 24 hrs.
@@ -109,8 +138,8 @@ const UpdateCustomer = ({
           <CardSetupForm
             selected={selected}
             mode="update"
-            learnerEmail={email}
-            learnerName={name}
+            learnerEmail={email === "" ? oldEmail : email}
+            learnerName={name === "" ? oldName : name}
             customerId={customerId}
             onSuccessfulConfirmation={onSuccessfulConfirmation}
           />
