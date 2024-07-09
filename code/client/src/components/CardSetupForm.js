@@ -7,7 +7,7 @@ import React, { useState, useEffect } from "react";
 import SignupComplete from "./SignupComplete";
 
 const CardSetupForm = (props) => {
-  const { selected, mode, details, customerId, learnerEmail, learnerName } =
+  const { selected, mode, details, customerId, learnerEmail, learnerName, onSuccessfulConfirmation } =
     props;
   const [paymentSucceeded, setPaymentSucceeded] = useState(false);
   const [error, setError] = useState(null);
@@ -46,8 +46,12 @@ const CardSetupForm = (props) => {
       const data = await response.json();
       setLast4(data.last4);
       setPaymentSucceeded(true);
+      
+      return 1;
+
     } catch (error) {
       setError("Failed to retrieve card information.");
+      return 0;
     }
   };
 
@@ -87,6 +91,60 @@ const CardSetupForm = (props) => {
       setProcessing(false);
     }
   };
+  
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+
+    if (!stripe || !elements) {
+      return;
+    }
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      const result = await stripe.confirmSetup({
+        elements,
+        confirmParams: {
+          payment_method_data: {
+            billing_details: {
+              name: learnerName,
+              email: learnerEmail,
+            },
+          },
+        },
+        redirect: "if_required",
+      });
+
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+
+      const response = await fetch(`/update-payment-details/${customerId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ paymentMethodId: result.setupIntent.payment_method }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update payment details");
+      }
+
+      const ok = await handleSuccessfulSetup(result.setupIntent.payment_method);
+      if(ok){
+        if (onSuccessfulConfirmation) {
+          await onSuccessfulConfirmation(customerId);
+        }
+      }
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
 
   if (selected === -1) return null;
   if (paymentSucceeded)
@@ -109,8 +167,9 @@ const CardSetupForm = (props) => {
           {details}
         </div>
         <div className="lesson-legal-info">
-          Your card will not be charged. By registering, you hold a session slot
-          which we will confirm within 24 hrs.
+          {mode === "update"
+            ? "Update your card details."
+            : "Your card will not be charged. By registering, you hold a session slot which we will confirm within 24 hrs."}
         </div>
         <div className="lesson-grid">
           <div className="lesson-inputs">
@@ -119,37 +178,74 @@ const CardSetupForm = (props) => {
                 {learnerName} ({learnerEmail})
               </span>
             </div>
+            {mode === "update" && last4 && (
+              <div className="lesson-input-box">
+                <span>Current card ending in {last4}</span>
+              </div>
+            )}
             <div className="lesson-payment-element">
               <PaymentElement id="payment-element" onChange={handleChange} />
-              <button
-                id="submit"
-                type="button"
-                onClick={handleClick}
-                disabled={!stripe || processing || !cardComplete}
-              >
-                {processing ? (
-                  <>
-                    <span
-                      id="spinner"
-                      className="spinner"
-                      style={{
-                        display: "inline-block",
-                        width: "20px",
-                        height: "20px",
-                        border: "3px solid rgba(255,255,255,.3)",
-                        borderRadius: "50%",
-                        borderTopColor: "#fff",
-                        animation: "spin 1s ease-in-out infinite",
-                        WebkitAnimation: "spin 1s ease-in-out infinite",
-                        marginRight: "10px",
-                      }}
-                    ></span>
-                    Processing...
-                  </>
-                ) : (
-                  "Complete Registration"
-                )}
-              </button>
+              {mode === "update" ? (
+                <button
+                  id="submit"
+                  type="button"
+                  onClick={handleUpdate}
+                  disabled={!stripe || processing || !cardComplete}
+                >
+                  {processing ? (
+                    <>
+                      <span
+                        id="spinner"
+                        className="spinner"
+                        style={{
+                          display: "inline-block",
+                          width: "20px",
+                          height: "20px",
+                          border: "3px solid rgba(255,255,255,.3)",
+                          borderRadius: "50%",
+                          borderTopColor: "#fff",
+                          animation: "spin 1s ease-in-out infinite",
+                          WebkitAnimation: "spin 1s ease-in-out infinite",
+                          marginRight: "10px",
+                        }}
+                      ></span>
+                      Processing...
+                    </>
+                  ) : (
+                    "Update Card"
+                  )}
+                </button>
+              ) : (
+                <button
+                  id="submit"
+                  type="button"
+                  onClick={handleClick}
+                  disabled={!stripe || processing || !cardComplete}
+                >
+                  {processing ? (
+                    <>
+                      <span
+                        id="spinner"
+                        className="spinner"
+                        style={{
+                          display: "inline-block",
+                          width: "20px",
+                          height: "20px",
+                          border: "3px solid rgba(255,255,255,.3)",
+                          borderRadius: "50%",
+                          borderTopColor: "#fff",
+                          animation: "spin 1s ease-in-out infinite",
+                          WebkitAnimation: "spin 1s ease-in-out infinite",
+                          marginRight: "10px",
+                        }}
+                      ></span>
+                      Processing...
+                    </>
+                  ) : (
+                    "Complete Registration"
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

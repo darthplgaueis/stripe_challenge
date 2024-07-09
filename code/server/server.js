@@ -136,114 +136,25 @@ app.get("/get-payment-method-details/:paymentMethodId", async (req, res) => {
   }
 });
 
-// TODO: Integrate Stripe
+app.post("/create-setup-intent", async (req, res) => {
+  const { customerId } = req.body;
 
-// Milestone 2: '/schedule-lesson'
-// Authorize a payment for a lesson
-//
-// Parameters:
-// customer_id: id of the customer
-// amount: amount of the lesson in cents
-// description: a description of this lesson
-//
-// Example call:
-// curl -X POST http://localhost:4242/schedule-lesson \
-//  -d customer_id=cus_GlY8vzEaWTFmps \
-//  -d amount=4500 \
-//  -d description='Lesson on Feb 25th'
-//
-// Returns: a JSON response of one of the following forms:
-// For a successful payment, return the Payment Intent:
-//   {
-//        payment: <payment_intent>
-//    }
-//
-// For errors:
-//  {
-//    error:
-//       code: the code returned from the Stripe error if there was one
-//       message: the message returned from the Stripe error. if no payment method was
-//         found for that customer return an msg 'no payment methods found for <customer_id>'
-//    payment_intent_id: if a payment intent was created but not successfully authorized
-// }
-// ####### My implementation ############
-// app.post("/schedule-lesson", async (req, res) => {
-// TODO: Integrate Stripe
-//   const { customerId, amount, description } = req.body;
+  if (!customerId) {
+    return res.status(400).json({ error: "Customer ID is required" });
+  }
 
-//   try {
-//     const paymentIntent = await stripe.paymentIntents.create({
-//       amount,
-//       customer: customerId,
-//       currency: "usd",
-//       automatic_payment_methods: {
-//         enabled: true,
-//       },
-//     });
-//     res.send(200).json({payment : paymentIntent});
-//   } catch (error) {
-//     res
-//     .status(500)
-//     .json( error.message );
-//   }
-// });
+  try {
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ["card"],
+    });
 
-// app.post("/schedule-lesson", async (req, res) => {
-//   const { customer_id, amount, description } = await req.body;
-
-//   console.log(customer_id, amount, description);
-//   try {
-//     // Fetch the customer to check for payment methods
-//     const customer = await stripe.customers.retrieve(customer_id);
-//     console.log(customer);
-//     // if (!customer.invoice_settings.default_payment_method) {
-//     //   return res.status(400).json({
-//     //     error: {
-//     //       code: "no_payment_method",
-//     //       message: `No payment methods found for ${customer_id}`,
-//     //     },
-//     //   });
-//     // }
-
-//     // Create a PaymentIntent
-//     const paymentIntent = await stripe.paymentIntents.create({
-//       amount: amount,
-//       currency: "usd", // Assuming USD, change if needed
-//       customer: customer_id,
-//       description: description,
-//       payment_method: customer.invoice_settings.default_payment_method,
-//       off_session: true,
-//       confirm: true,
-//       metadata: {
-//         type: "lesson-payment",
-//       },
-//     });
-
-//     // If successful, return the PaymentIntent
-//     res.json({ payment: paymentIntent });
-//   } catch (error) {
-//     console.error("Error:", error);
-
-//     // Handle Stripe errors
-//     if (error.type === "StripeError") {
-//       res.status(400).json({
-//         error: {
-//           code: error.code,
-//           message: error.message,
-//         },
-//         payment_intent_id: error.payment_intent?.id,
-//       });
-//     } else {
-//       // Handle other errors
-//       res.status(500).json({
-//         error: {
-//           code: "internal_server_error",
-//           message: "An unexpected error occurred",
-//         },
-//       });
-//     }
-//   }
-// });
+    res.json({ clientSecret: setupIntent.client_secret });
+  } catch (error) {
+    console.error("Error creating Setup Intent:", error);
+    res.status(500).json({ error: "Failed to create Setup Intent" });
+  }
+});
 
 app.post("/schedule-lesson", async (req, res) => {
   const { customer_id, amount, description } = req.body;
@@ -290,47 +201,6 @@ app.post("/schedule-lesson", async (req, res) => {
   }
 });
 
-// Milestone 2: '/complete-lesson-payment'
-// Capture a payment for a lesson.
-//
-// Parameters:
-// amount: (optional) amount to capture if different than the original amount authorized
-//
-// Example call:
-// curl -X POST http://localhost:4242/complete_lesson_payment \
-//  -d payment_intent_id=pi_XXX \
-//  -d amount=4500
-//
-// Returns: a JSON response of one of the following forms:
-//
-// For a successful payment, return the payment intent:
-//   {
-//        payment: <payment_intent>
-//    }
-//
-// for errors:
-//  {
-//    error:
-//       code: the code returned from the error
-//       message: the message returned from the error from Stripe
-// }
-//
-
-// ################### My implementation #######################
-// app.post("/complete-lesson-payment", async (req, res) => {
-//   // TODO: Integrate Stripe
-//   const { payement_intent_id, amount } = req.body;
-
-//   let paymentIntent;
-//   if (amount !== undefined) {
-//     paymentIntent = await stripe.paymentIntents.update(payement_intent_id, {
-//       amount: amount,
-//     });
-//   }
-//   paymentIntent = await stripe.paymentIntents.capture(payement_intent_id);
-//   res.json({payment : paymentIntent});
-// });
-
 app.post("/complete-lesson-payment", async (req, res) => {
   const { payment_intent_id, amount } = req.body;
   // console.log("complete lesson payment endpoint hit!");
@@ -355,35 +225,6 @@ app.post("/complete-lesson-payment", async (req, res) => {
     });
   }
 });
-
-// Milestone 2: '/refund-lesson'
-// Refunds a lesson payment.  Refund the payment from the customer (or cancel the auth
-// if a payment hasn't occurred).
-// Sets the refund reason to 'requested_by_customer'
-//
-// Parameters:
-// payment_intent_id: the payment intent to refund
-// amount: (optional) amount to refund if different than the original payment
-//
-// Example call:
-// curl -X POST http://localhost:4242/refund-lesson \
-//   -d payment_intent_id=pi_XXX \
-//   -d amount=2500
-//
-// Returns
-// If the refund is successfully created returns a JSON response of the format:
-//
-// {
-//   refund: refund.id
-// }
-//
-// If there was an error:
-//  {
-//    error: {
-//        code: e.error.code,
-//        message: e.error.message
-//      }
-//  }
 
 app.post("/refund-lesson", async (req, res) => {
   const { payment_intent_id, amount } = req.body;
@@ -431,48 +272,300 @@ app.get("/account-update/:customer_id", async (req, res) => {
 });
 
 app.get("/payment-method/:customer_id", async (req, res) => {
-  // TODO: Retrieve the customer's payment method for the client
+  const customerId = req.params.customer_id;
+
+  try {
+    const paymentMethods = await stripe.customers.listPaymentMethods(
+      customerId,
+      {
+        limit: 1,
+      }
+    );
+
+    if (paymentMethods.data.length === 0) {
+      console.log("No payment methods found for this customer.");
+      return res
+        .status(404)
+        .json({ message: "No payment methods found for this customer." });
+    }
+
+    const paymentMethod = paymentMethods.data[0];
+
+    res.status(200).send(paymentMethod);
+  } catch (error) {
+    console.error("Failed to retrieve payment methods:", error);
+    res.status(500).json({
+      error: "Failed to retrieve payment methods",
+      details: error.message,
+    });
+  }
 });
+
+// app.post("/update-payment-details/:customer_id", async (req, res) => {
+//   const customerId = req.params.customer_id;
+//   const { paymentMethodId } = req.body;
+
+//   if (!paymentMethodId) {
+//     return res.status(400).json({ error: "Payment method ID is required" });
+//   }
+
+//   try {
+//     // Attach the new payment method to the customer
+//     await stripe.paymentMethods.attach(paymentMethodId, {
+//       customer: customerId,
+//     });
+
+//     // Set it as the default payment method
+//     await stripe.customers.update(customerId, {
+//       invoice_settings: {
+//         default_payment_method: paymentMethodId,
+//       },
+//     });
+
+//     // Retrieve the updated payment method to send back to the client
+//     const updatedPaymentMethod = await stripe.paymentMethods.retrieve(
+//       paymentMethodId
+//     );
+
+//     res.json({
+//       success: true,
+//       paymentMethod: {
+//         id: updatedPaymentMethod.id,
+//         type: updatedPaymentMethod.type,
+//         billingDetails: updatedPaymentMethod.billing_details,
+//         card: {
+//           brand: updatedPaymentMethod.card.brand,
+//           expMonth: updatedPaymentMethod.card.exp_month,
+//           expYear: updatedPaymentMethod.card.exp_year,
+//           last4: updatedPaymentMethod.card.last4,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error updating payment details:", error);
+//     res.status(500).json({
+//       error: "Failed to update payment details",
+//       details: error.message,
+//     });
+//   }
+// });
 
 app.post("/update-payment-details/:customer_id", async (req, res) => {
-  // TODO: Update the customer's payment details
+  const customerId = req.params.customer_id;
+  const { paymentMethodId } = req.body;
+
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: "Payment method ID is required" });
+  }
+
+  try {
+    // Retrieve the customer to get their current payment methods
+    const customer = await stripe.customers.retrieve(customerId, {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+
+    // If there's an existing default payment method, detach it
+    if (customer.invoice_settings.default_payment_method) {
+      await stripe.paymentMethods.detach(
+        customer.invoice_settings.default_payment_method.id
+      );
+    }
+
+    // Attach the new payment method to the customer
+    await stripe.paymentMethods.attach(paymentMethodId, {
+      customer: customerId,
+    });
+
+    // Set it as the default payment method
+    await stripe.customers.update(customerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
+
+    // Retrieve the updated payment method to send back to the client
+    const updatedPaymentMethod = await stripe.paymentMethods.retrieve(
+      paymentMethodId
+    );
+
+    res.json({
+      success: true,
+      paymentMethod: {
+        id: updatedPaymentMethod.id,
+        type: updatedPaymentMethod.type,
+        billingDetails: updatedPaymentMethod.billing_details,
+        card: {
+          brand: updatedPaymentMethod.card.brand,
+          expMonth: updatedPaymentMethod.card.exp_month,
+          expYear: updatedPaymentMethod.card.exp_year,
+          last4: updatedPaymentMethod.card.last4,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error updating payment details:", error);
+    res.status(500).json({
+      error: "Failed to update payment details",
+      details: error.message,
+    });
+  }
 });
 
-// Handle account updates
-app.post("/account-update", async (req, res) => {
-  // TODO: Handle updates to any of the customer's account details
-});
+app.post("/account-update/:customer_id", async (req, res) => {
+  try {
+    const customerId = req.params.customer_id;
+    const { name, email } = req.body;
 
-// Milestone 3: '/delete-account'
-// Deletes a customer object if there are no uncaptured payment intents for them.
-//
-// Parameters:
-//   customer_id: the id of the customer to delete
-//
-// Example request
-//   curl -X POST http://localhost:4242/delete-account/:customer_id \
-//
-// Returns 1 of 3 responses:
-// If the customer had no uncaptured charges and was successfully deleted returns the response:
-//   {
-//        deleted: true
-//   }
-//
-// If the customer had uncaptured payment intents, return a list of the payment intent ids:
-//   {
-//     uncaptured_payments: ids of any uncaptured payment intents
-//   }
-//
-// If there was an error:
-//  {
-//    error: {
-//        code: e.error.code,
-//        message: e.error.message
-//      }
-//  }
-//
+    // Retrieve the customer
+    let customer = await stripe.customers.retrieve(customerId, {
+      expand: ['invoice_settings.default_payment_method']
+    });
+
+    let emailAlreadyExists = false;
+
+    // Check if email is provided and different from current
+    if (email && email !== customer.email) {
+      // Search for customers with the new email
+      const existingCustomers = await stripe.customers.list({
+        email: email,
+        limit: 1
+      });
+      console.log("existing customers: ", existingCustomers);
+
+      // If a customer with this email already exists (and it's not the current customer)
+      if (existingCustomers.data.length > 0 && existingCustomers.data[0].id !== customerId) {
+        emailAlreadyExists = true;
+      }
+    }
+    console.log(emailAlreadyExists);
+
+    if(emailAlreadyExists){
+      return res.status(201).send({message : "Customer email already exists!"});
+    }
+    let paymentMethodId = customer.invoice_settings.default_payment_method?.id;
+
+    // If no default payment method, try to get the first available payment method
+    if (!paymentMethodId) {
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: customerId,
+        type: 'card'
+      });
+
+      if (paymentMethods.data.length > 0) {
+        paymentMethodId = paymentMethods.data[0].id;
+      } else {
+        return res.status(404).json({ error: "No payment methods found for this customer" });
+      }
+    }
+
+    // Prepare the update object
+    const updateData = {};
+    if (name !== undefined && name !== "") {
+      updateData.name = name;
+    }
+    if (email !== undefined && email !== "" && !emailAlreadyExists) {
+      updateData.email = email;
+    }
+
+    // Only update if there are changes
+    if (Object.keys(updateData).length > 0) {
+      // Update the customer first
+      if (updateData.email || updateData.name) {
+        await stripe.customers.update(customerId, {
+          email: updateData.email,
+          name: updateData.name
+        });
+      }
+
+      // Update the payment method with new billing details
+      const updatedPaymentMethod = await stripe.paymentMethods.update(paymentMethodId, {
+        billing_details: updateData,
+      });
+
+      res.status(200).json({
+        success: true,
+        emailAlreadyExists: emailAlreadyExists,
+        paymentMethod: {
+          id: updatedPaymentMethod.id,
+          type: updatedPaymentMethod.type,
+          billingDetails: updatedPaymentMethod.billing_details,
+          card: updatedPaymentMethod.card ? {
+            brand: updatedPaymentMethod.card.brand,
+            expMonth: updatedPaymentMethod.card.exp_month,
+            expYear: updatedPaymentMethod.card.exp_year,
+            last4: updatedPaymentMethod.card.last4,
+          } : null,
+        },
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        emailAlreadyExists: emailAlreadyExists,
+        message: "No updates were necessary",
+      });
+    }
+  } catch (error) {
+    console.error("Error updating payment method details:", error);
+    res.status(500).json({
+      error: "An error occurred while updating the payment method details.",
+      details: error.message
+    });
+  }
+});
 app.post("/delete-account/:customer_id", async (req, res) => {
-  // TODO: Integrate Stripe
+  try {
+    const customerId = req.params.customer_id;
+
+    // First, check for any uncaptured PaymentIntents
+    const paymentIntents = await stripe.paymentIntents.list({
+      customer: customerId,
+      limit: 100, // Adjust this limit as needed
+    });
+
+    const uncapturedPaymentIntents = paymentIntents.data.filter(
+      (pi) => pi.status === 'requires_capture'
+    );
+
+    if (uncapturedPaymentIntents.length > 0) {
+      // If there are uncaptured PaymentIntents, return their IDs
+      return res.status(200).json({
+        uncaptured_payments: uncapturedPaymentIntents.map(pi => pi.id)
+      });
+    }
+
+    // If no uncaptured PaymentIntents, proceed with deletion
+    const deletedCustomer = await stripe.customers.del(customerId);
+
+    if (deletedCustomer.deleted) {
+      return res.status(200).json({
+        deleted: true
+      });
+    } else {
+      // This case should rarely occur, but it's good to handle it
+      throw new Error('Customer not deleted for unknown reason');
+    }
+
+  } catch (e) {
+    console.error('Error deleting customer:', e);
+
+    // Check if it's a Stripe error
+    if (e.type === 'StripeError') {
+      return res.status(400).json({
+        error: {
+          code: e.code,
+          message: e.message
+        }
+      });
+    }
+
+    // For other types of errors
+    return res.status(500).json({
+      error: {
+        code: 'internal_server_error',
+        message: 'An unexpected error occurred'
+      }
+    });
+  }
 });
 
 // Milestone 4: '/calculate-lesson-total'
