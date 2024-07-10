@@ -601,7 +601,7 @@ app.get("/calculate-lesson-total", async (req, res) => {
 
     const charges = await stripe.charges.list({
       created: { gte: thirtySixHoursAgo },
-      limit: 100, // Adjust this as needed
+      limit: 100000, // Adjust this as needed
     });
     let payment_total = 0;
     let fee_total = 0;
