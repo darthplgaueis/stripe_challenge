@@ -8,9 +8,11 @@ require("dotenv").config({ path: "./.env" });
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
-
+const moment = require("moment");
 const allitems = {};
 const fs = require("fs");
+const { all } = require("axios");
+const { fail } = require("assert");
 
 app.use(express.static(process.env.STATIC_DIR));
 
@@ -418,7 +420,7 @@ app.post("/account-update/:customer_id", async (req, res) => {
 
     // Retrieve the customer
     let customer = await stripe.customers.retrieve(customerId, {
-      expand: ['invoice_settings.default_payment_method']
+      expand: ["invoice_settings.default_payment_method"],
     });
 
     let emailAlreadyExists = false;
@@ -428,19 +430,24 @@ app.post("/account-update/:customer_id", async (req, res) => {
       // Search for customers with the new email
       const existingCustomers = await stripe.customers.list({
         email: email,
-        limit: 1
+        limit: 1,
       });
       console.log("existing customers: ", existingCustomers);
 
       // If a customer with this email already exists (and it's not the current customer)
-      if (existingCustomers.data.length > 0 && existingCustomers.data[0].id !== customerId) {
+      if (
+        existingCustomers.data.length > 0 &&
+        existingCustomers.data[0].id !== customerId
+      ) {
         emailAlreadyExists = true;
       }
     }
     console.log(emailAlreadyExists);
 
-    if(emailAlreadyExists){
-      return res.status(201).send({message : "Customer email already exists!"});
+    if (emailAlreadyExists) {
+      return res
+        .status(201)
+        .send({ message: "Customer email already exists!" });
     }
     let paymentMethodId = customer.invoice_settings.default_payment_method?.id;
 
@@ -448,13 +455,15 @@ app.post("/account-update/:customer_id", async (req, res) => {
     if (!paymentMethodId) {
       const paymentMethods = await stripe.paymentMethods.list({
         customer: customerId,
-        type: 'card'
+        type: "card",
       });
 
       if (paymentMethods.data.length > 0) {
         paymentMethodId = paymentMethods.data[0].id;
       } else {
-        return res.status(404).json({ error: "No payment methods found for this customer" });
+        return res
+          .status(404)
+          .json({ error: "No payment methods found for this customer" });
       }
     }
 
@@ -473,14 +482,17 @@ app.post("/account-update/:customer_id", async (req, res) => {
       if (updateData.email || updateData.name) {
         await stripe.customers.update(customerId, {
           email: updateData.email,
-          name: updateData.name
+          name: updateData.name,
         });
       }
 
       // Update the payment method with new billing details
-      const updatedPaymentMethod = await stripe.paymentMethods.update(paymentMethodId, {
-        billing_details: updateData,
-      });
+      const updatedPaymentMethod = await stripe.paymentMethods.update(
+        paymentMethodId,
+        {
+          billing_details: updateData,
+        }
+      );
 
       res.status(200).json({
         success: true,
@@ -489,12 +501,14 @@ app.post("/account-update/:customer_id", async (req, res) => {
           id: updatedPaymentMethod.id,
           type: updatedPaymentMethod.type,
           billingDetails: updatedPaymentMethod.billing_details,
-          card: updatedPaymentMethod.card ? {
-            brand: updatedPaymentMethod.card.brand,
-            expMonth: updatedPaymentMethod.card.exp_month,
-            expYear: updatedPaymentMethod.card.exp_year,
-            last4: updatedPaymentMethod.card.last4,
-          } : null,
+          card: updatedPaymentMethod.card
+            ? {
+                brand: updatedPaymentMethod.card.brand,
+                expMonth: updatedPaymentMethod.card.exp_month,
+                expYear: updatedPaymentMethod.card.exp_year,
+                last4: updatedPaymentMethod.card.last4,
+              }
+            : null,
         },
       });
     } else {
@@ -508,7 +522,7 @@ app.post("/account-update/:customer_id", async (req, res) => {
     console.error("Error updating payment method details:", error);
     res.status(500).json({
       error: "An error occurred while updating the payment method details.",
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -523,13 +537,13 @@ app.post("/delete-account/:customer_id", async (req, res) => {
     });
 
     const uncapturedPaymentIntents = paymentIntents.data.filter(
-      (pi) => pi.status === 'requires_capture'
+      (pi) => pi.status === "requires_capture"
     );
 
     if (uncapturedPaymentIntents.length > 0) {
       // If there are uncaptured PaymentIntents, return their IDs
       return res.status(200).json({
-        uncaptured_payments: uncapturedPaymentIntents.map(pi => pi.id)
+        uncaptured_payments: uncapturedPaymentIntents.map((pi) => pi.id),
       });
     }
 
@@ -538,32 +552,31 @@ app.post("/delete-account/:customer_id", async (req, res) => {
 
     if (deletedCustomer.deleted) {
       return res.status(200).json({
-        deleted: true
+        deleted: true,
       });
     } else {
       // This case should rarely occur, but it's good to handle it
-      throw new Error('Customer not deleted for unknown reason');
+      throw new Error("Customer not deleted for unknown reason");
     }
-
   } catch (e) {
-    console.error('Error deleting customer:', e);
+    console.error("Error deleting customer:", e);
 
     // Check if it's a Stripe error
-    if (e.type === 'StripeError') {
+    if (e.type === "StripeError") {
       return res.status(400).json({
         error: {
           code: e.code,
-          message: e.message
-        }
+          message: e.message,
+        },
       });
     }
 
     // For other types of errors
     return res.status(500).json({
       error: {
-        code: 'internal_server_error',
-        message: 'An unexpected error occurred'
-      }
+        code: "internal_server_error",
+        message: "An unexpected error occurred",
+      },
     });
   }
 });
@@ -571,9 +584,9 @@ app.post("/delete-account/:customer_id", async (req, res) => {
 // Milestone 4: '/calculate-lesson-total'
 // Returns the total amounts for payments for lessons, ignoring payments
 // for videos and concert tickets, ranging over the last 36 hours.
-//
+
 // Example call: curl -X GET http://localhost:4242/calculate-lesson-total
-//
+
 // Returns a JSON response of the format:
 // {
 //      payment_total: Total before fees and refunds (including disputes), and excluding payments
@@ -581,9 +594,57 @@ app.post("/delete-account/:customer_id", async (req, res) => {
 //      fee_total: Total amount in fees that the store has paid to Stripe
 //      net_total: Total amount the store has collected from payments, minus their fees.
 // }
-//
+
 app.get("/calculate-lesson-total", async (req, res) => {
-  // TODO: Integrate Stripe
+  try {
+    const thirtySixHoursAgo = moment().subtract(36, "hours").unix();
+
+    const charges = await stripe.charges.list({
+      created: { gte: thirtySixHoursAgo },
+      limit: 100, // Adjust this as needed
+    });
+    let payment_total = 0;
+    let fee_total = 0;
+
+
+    for (const charge of charges.data) {
+      if (charge.status === "succeeded") {
+        payment_total += charge.amount; // Stripe amounts are already in cents
+
+        if (charge.balance_transaction) {
+          try {
+            const balanceTransaction =
+              await stripe.balanceTransactions.retrieve(
+                charge.balance_transaction
+              );
+            const fee = balanceTransaction.fee; // Fee in cents
+            fee_total += fee; // Stripe fees are also in cents
+          } catch (balanceTransactionError) {
+            console.error(
+              `Error fetching balance transaction for charge ${charge.id}:`,
+              balanceTransactionError
+            );
+          }
+        } else {
+          console.warn(
+            `Charge ${charge.id} does not have a balance transaction.`
+          );
+        }
+      }
+    }
+
+    const net_total = payment_total - fee_total;
+    res.json({
+      payment_total: payment_total,
+      fee_total: fee_total,
+      net_total: net_total,
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while calculating lesson costs" });
+  } // TODO: Integrate Stripe
 });
 
 // Milestone 4: '/find-customers-with-failed-payments'
@@ -619,7 +680,52 @@ app.get("/calculate-lesson-total", async (req, res) => {
 //   {},
 // ]
 app.get("/find-customers-with-failed-payments", async (req, res) => {
-  // TODO: Integrate Stripe
+  try {
+    const thirtySixHoursAgo = moment().subtract(36, "hours").unix();
+
+    const charges = await stripe.charges.list({
+      created: { gte: thirtySixHoursAgo },
+      limit: 100, // Adjust this as needed
+    });
+
+    let response = [];
+    for (const charge of charges.data) {
+      if (charge.status === "failed" && charge.customer && charge.payment_intent) {
+        let failedCustomer = {};
+        let customer = {
+          id: charge.customer,
+          email: charge.billing_details.email,
+          name: charge.billing_details.name,
+        };
+        const payment_intent = await stripe.paymentIntents.retrieve(charge.payment_intent);
+        // console.log(payment_intent)
+        let payment_method = {};
+        if (charge.payment_method_details && charge.payment_method_details.card) {
+          payment_method = {
+            last4: charge.payment_method_details.card.last4,
+            brand: charge.payment_method_details.card.brand,
+          };
+        }
+
+        failedCustomer.customer = customer;
+        failedCustomer.payment_intent = {
+          id: payment_intent.id,
+          status: "failed",
+          error: "generic_decline" 
+        };
+        failedCustomer.payment_method = payment_method;
+
+        response.push(failedCustomer);
+      }
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({
+      error: "An error occurred while finding customers with failed payments",
+    });
+  }
 });
 
 function errorHandler(err, req, res, next) {
