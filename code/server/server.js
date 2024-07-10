@@ -594,58 +594,94 @@ app.post("/delete-account/:customer_id", async (req, res) => {
 //      fee_total: Total amount in fees that the store has paid to Stripe
 //      net_total: Total amount the store has collected from payments, minus their fees.
 // }
-
 app.get("/calculate-lesson-total", async (req, res) => {
   try {
     const thirtySixHoursAgo = moment().subtract(36, "hours").unix();
 
+    // Retrieve all charges from the last 36 hours
     const charges = await stripe.charges.list({
       created: { gte: thirtySixHoursAgo },
-      limit: 100000, // Adjust this as needed
+      limit: 100, // Adjust as necessary
     });
+
     let payment_total = 0;
     let fee_total = 0;
-
+    let net_total = 0;
 
     for (const charge of charges.data) {
-      if (charge.status === "succeeded") {
-        payment_total += charge.amount; // Stripe amounts are already in cents
-
-        if (charge.balance_transaction) {
-          try {
-            const balanceTransaction =
-              await stripe.balanceTransactions.retrieve(
-                charge.balance_transaction
-              );
-            const fee = balanceTransaction.fee; // Fee in cents
-            fee_total += fee; // Stripe fees are also in cents
-          } catch (balanceTransactionError) {
-            console.error(
-              `Error fetching balance transaction for charge ${charge.id}:`,
-              balanceTransactionError
-            );
-          }
-        } else {
-          console.warn(
-            `Charge ${charge.id} does not have a balance transaction.`
-          );
-        }
+      console.log(charge);
+      if (charge.status === "succeeded" && charge.captured && charge.metadata) {
+        payment_total += charge.amount; // Amount is in cents
+        const balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction);
+        fee_total += balanceTransaction.fee; // Fee is also in cents
       }
     }
 
-    const net_total = payment_total - fee_total;
+    net_total = payment_total - fee_total;
+
     res.json({
-      payment_total: payment_total,
-      fee_total: fee_total,
-      net_total: net_total,
+      payment_total,
+      fee_total,
+      net_total,
     });
   } catch (error) {
     console.error("Error:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while calculating lesson costs" });
-  } // TODO: Integrate Stripe
+    res.status(500).json({
+      error: "An error occurred while calculating the lesson total",
+    });
+  }
 });
+// app.get("/calculate-lesson-total", async (req, res) => {
+//   try {
+//     const thirtySixHoursAgo = moment().subtract(36, "hours").unix();
+
+//     const charges = await stripe.charges.list({
+//       created: { gte: thirtySixHoursAgo },
+//       limit: 100000, // Adjust this as needed
+//     });
+//     let payment_total = 0;
+//     let fee_total = 0;
+
+
+//     for (const charge of charges.data) {
+//       if (charge.status === "succeeded") {
+//         payment_total += charge.amount; // Stripe amounts are already in cents
+
+//         if (charge.balance_transaction) {
+//           try {
+//             const balanceTransaction =
+//               await stripe.balanceTransactions.retrieve(
+//                 charge.balance_transaction
+//               );
+//             const fee = balanceTransaction.fee; // Fee in cents
+//             fee_total += fee; // Stripe fees are also in cents
+//           } catch (balanceTransactionError) {
+//             console.error(
+//               `Error fetching balance transaction for charge ${charge.id}:`,
+//               balanceTransactionError
+//             );
+//           }
+//         } else {
+//           console.warn(
+//             `Charge ${charge.id} does not have a balance transaction.`
+//           );
+//         }
+//       }
+//     }
+
+//     const net_total = payment_total - fee_total;
+//     res.json({
+//       payment_total: payment_total,
+//       fee_total: fee_total,
+//       net_total: net_total,
+//     });
+//   } catch (error) {
+//     console.error("Error:", error);
+//     res
+//       .status(500)
+//       .json({ error: "An error occurred while calculating lesson costs" });
+//   } // TODO: Integrate Stripe
+// });
 
 // Milestone 4: '/find-customers-with-failed-payments'
 // Returns any customer who meets the following conditions:
