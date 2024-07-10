@@ -10,6 +10,7 @@
   "author": "stripe-ecosystem",
   "license": "ISC",
   "dependencies": {
+    "axios": "^1.7.2",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.1",
