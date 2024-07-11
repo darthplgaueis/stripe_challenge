@@ -608,36 +608,55 @@ app.get("/calculate-lesson-total", async (req, res) => {
     let payment_total = 0;
     let fee_total = 0;
     let net_total = 0;
-    let ok = 0;
 
     for (const charge of charges.data) {
-      if (charge.status === "succeeded" && charge.captured) {
-        const customerId = charge.customer;
-        const paymentIntentId = charge.payment_intent;
+      if (charge.status !== "succeeded" || !charge.captured) {
+        continue;
+      }
 
-        let customer = await stripe.customers.retrieve(customerId);
-        const paymentIntent = await stripe.paymentIntents.retrieve(
-          paymentIntentId,
-          {
-            expand: ["latest_charge.balance_transaction"],
-          }
-        );
+      const customerId = charge.customer;
+      const paymentIntentId = charge.payment_intent;
 
-        if (ok < 1) {
-          console.log("Charge object:", charge);
-          console.log("Customer:", customer);
-          console.log("Payment Intent:", paymentIntent);
-          ok++;
-        }
+      if (!customerId || !paymentIntentId) {
+        console.log(`Skipping charge ${charge.id}: Missing customer or payment intent ID`);
+        continue;
+      }
 
-        const feeDetails =
-          paymentIntent.latest_charge.balance_transaction.fee_details;
-        const totalFee = feeDetails.reduce((sum, fee) => sum + fee.amount, 0);
-        if (customer.metadata && customer.metadata.hasOwnProperty('first_lesson')) {
-          payment_total += charge.amount;
-          fee_total += totalFee;
-        }
+      let customer, paymentIntent;
 
+      try {
+        customer = await stripe.customers.retrieve(customerId);
+      } catch (error) {
+        console.error(`Error retrieving customer ${customerId}:`, error.message);
+        continue;
+      }
+
+      try {
+        paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+          expand: ["latest_charge.balance_transaction"],
+        });
+      } catch (error) {
+        console.error(`Error retrieving payment intent ${paymentIntentId}:`, error.message);
+        continue;
+      }
+
+      if (!paymentIntent.latest_charge || !paymentIntent.latest_charge.balance_transaction) {
+        console.log(`Skipping payment intent ${paymentIntentId}: Missing balance transaction`);
+        continue;
+      }
+
+      const feeDetails = paymentIntent.latest_charge.balance_transaction.fee_details;
+      
+      if (!feeDetails) {
+        console.log(`Skipping payment intent ${paymentIntentId}: Missing fee details`);
+        continue;
+      }
+
+      const totalFee = feeDetails.reduce((sum, fee) => sum + fee.amount, 0);
+
+      if (customer.metadata && customer.metadata.hasOwnProperty("first_lesson")) {
+        payment_total += charge.amount;
+        fee_total += totalFee;
       }
     }
 
