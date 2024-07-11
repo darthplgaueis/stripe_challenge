@@ -594,6 +594,7 @@ app.post("/delete-account/:customer_id", async (req, res) => {
 //      fee_total: Total amount in fees that the store has paid to Stripe
 //      net_total: Total amount the store has collected from payments, minus their fees.
 // }
+
 app.get("/calculate-lesson-total", async (req, res) => {
   try {
     const thirtySixHoursAgo = moment().subtract(36, "hours").unix();
@@ -607,18 +608,41 @@ app.get("/calculate-lesson-total", async (req, res) => {
     let payment_total = 0;
     let fee_total = 0;
     let net_total = 0;
+    let ok = 0;
 
     for (const charge of charges.data) {
-      console.log(charge);
-      if (charge.status === "succeeded" && charge.captured && charge.metadata) {
-        payment_total += charge.amount; // Amount is in cents
-        const balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction);
-        fee_total += balanceTransaction.fee; // Fee is also in cents
+      if (charge.status === "succeeded" && charge.captured) {
+        const customerId = charge.customer;
+        const paymentIntentId = charge.payment_intent;
+
+        let customer = await stripe.customers.retrieve(customerId);
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+          paymentIntentId,
+          {
+            expand: ["latest_charge.balance_transaction"],
+          }
+        );
+
+        if (ok < 1) {
+          console.log("Charge object:", charge);
+          console.log("Customer:", customer);
+          console.log("Payment Intent:", paymentIntent);
+          ok++;
+        }
+
+        const feeDetails =
+          paymentIntent.latest_charge.balance_transaction.fee_details;
+        const totalFee = feeDetails.reduce((sum, fee) => sum + fee.amount, 0);
+        if (customer.metadata && customer.metadata.hasOwnProperty('first_lesson')) {
+          payment_total += charge.amount;
+          fee_total += totalFee;
+        }
+
       }
     }
 
     net_total = payment_total - fee_total;
-
+    console.log(payment_total, net_total, fee_total);
     res.json({
       payment_total,
       fee_total,
@@ -631,6 +655,7 @@ app.get("/calculate-lesson-total", async (req, res) => {
     });
   }
 });
+
 // app.get("/calculate-lesson-total", async (req, res) => {
 //   try {
 //     const thirtySixHoursAgo = moment().subtract(36, "hours").unix();
@@ -641,7 +666,6 @@ app.get("/calculate-lesson-total", async (req, res) => {
 //     });
 //     let payment_total = 0;
 //     let fee_total = 0;
-
 
 //     for (const charge of charges.data) {
 //       if (charge.status === "succeeded") {
@@ -726,17 +750,26 @@ app.get("/find-customers-with-failed-payments", async (req, res) => {
 
     let response = [];
     for (const charge of charges.data) {
-      if (charge.status === "failed" && charge.customer && charge.payment_intent) {
+      if (
+        charge.status === "failed" &&
+        charge.customer &&
+        charge.payment_intent
+      ) {
         let failedCustomer = {};
         let customer = {
           id: charge.customer,
           email: charge.billing_details.email,
           name: charge.billing_details.name,
         };
-        const payment_intent = await stripe.paymentIntents.retrieve(charge.payment_intent);
+        const payment_intent = await stripe.paymentIntents.retrieve(
+          charge.payment_intent
+        );
         // console.log(payment_intent)
         let payment_method = {};
-        if (charge.payment_method_details && charge.payment_method_details.card) {
+        if (
+          charge.payment_method_details &&
+          charge.payment_method_details.card
+        ) {
           payment_method = {
             last4: charge.payment_method_details.card.last4,
             brand: charge.payment_method_details.card.brand,
@@ -747,7 +780,7 @@ app.get("/find-customers-with-failed-payments", async (req, res) => {
         failedCustomer.payment_intent = {
           id: payment_intent.id,
           status: "failed",
-          error: "generic_decline" 
+          error: "generic_decline",
         };
         failedCustomer.payment_method = payment_method;
 
